@@ -1,16 +1,16 @@
 use std::time::Duration;
 
-use folding_molecule::{EnergyModel, PeptideChain, ResidueId};
-use folding_time::{RotationClock, Trajectory};
-use rand::{Rng, SeedableRng, rngs::StdRng};
-
 use crate::folding_parser::{ContractInstruction, FoldingContract, PhysicsLevel, PhysicsSpanMode};
 use crate::folding_ruleset::{RuleViolation, Ruleset};
 use crate::micro_oscillator::MicroOscillator;
 use crate::physics_bridge::{self, PhysicsRequest, PhysicsSpanMetrics};
 use crate::protein_state::{EnergyState, ProteinSnapshot, ProteinState};
 use crate::rotation_solver::{RotationCommand, RotationOutcome, RotationSolver};
+use crate::simple_rng::SimpleRng;
 use crate::validation::{ValidationEvent, Validator};
+use folding_molecule::{EnergyModel, PeptideChain, ResidueId};
+use folding_time::RotationClock;
+use folding_time::trajectory::Trajectory;
 
 #[derive(Clone, Debug)]
 pub enum TemperatureSchedule {
@@ -74,7 +74,7 @@ pub struct FoldingEngine {
     ghost_trajectory: Trajectory,
     temperature: f64,
     boltzmann_constant: f64,
-    rng: StdRng,
+    rng: SimpleRng,
     temperature_schedule: Option<TemperatureSchedule>,
     initial_temperature: f64,
     step_index: usize,
@@ -238,8 +238,8 @@ impl FoldingEngineBuilder {
             temperature = *start;
         }
         let rng = match self.rng_seed {
-            Some(seed) => StdRng::seed_from_u64(seed),
-            None => StdRng::from_entropy(),
+            Some(seed) => SimpleRng::seed_from_u64(seed),
+            None => SimpleRng::from_entropy(),
         };
         let state = ProteinState::new(chain, energy_model);
         let solver = RotationSolver::new(oscillator, clock);
