@@ -60,6 +60,33 @@ Key outputs:
 
 ---
 
+## 🧬 LogLine Fold CLI (v0.1)
+
+The minimal folding runtime ships as a standalone command that turns FASTA or
+JSON sequences into audit-ready artefacts:
+
+```bash
+cargo run -- fold data/raw/demo_genome.fa \
+  --output outputs/demo.pdb \
+  --contract outputs/demo.lll \
+  --rollback
+```
+
+This produces:
+
+- `outputs/demo.pdb` — deterministic Cα-only geometry using the LogLine mock
+  helix generator.
+- `outputs/demo.lll` — workflow contract matching the manifesto template with
+  rollback enabled.
+- Optional PyTorch embeddings sourced via `scripts/torch_embeddings.py` when a
+  `PYTHON_TORCH_BIN` runtime with `torch` is available.
+
+Set `LOGLINE_TORCH_HELPER` to point at a custom embedding script if you want to
+experiment with v0.2 models. The CLI defaults to heuristic coordinates when the
+helper script or PyTorch are absent.
+
+---
+
 ## 🧠 Contracts 101 (`.lll`)
 
 | Directive | Example | Purpose |

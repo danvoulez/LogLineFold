@@ -1,0 +1,7 @@
+span:type=protein_folding
+id: logline_fold_run
+steps:
+  - load: "input.fasta"
+  - fold: "logline_encoder_v1"
+  - export: "output.pdb"
+rollback: true

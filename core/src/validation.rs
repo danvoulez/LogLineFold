@@ -1,6 +1,5 @@
 use folding_molecule::{PeptideChain, ResidueId};
-use folding_time::Trajectory;
-use folding_time::trajectory::SpanRecord;
+use folding_time::trajectory::{SpanRecord, Trajectory};
 
 use crate::folding_ruleset::{RuleViolation, Ruleset};
 

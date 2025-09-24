@@ -5,6 +5,7 @@ pub mod micro_oscillator;
 pub mod physics_bridge;
 pub mod protein_state;
 pub mod rotation_solver;
+pub mod simple_rng;
 pub mod validation;
 
 pub use folding_parser::{ContractInstruction, FoldingContract, PhysicsLevel, PhysicsSpanMode};

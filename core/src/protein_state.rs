@@ -1,5 +1,5 @@
 use folding_molecule::{EnergyModel, PeptideChain, ResidueId};
-use folding_time::Trajectory;
+use folding_time::trajectory::Trajectory;
 
 /// Runtime representation of the protein being folded.
 #[derive(Debug)]

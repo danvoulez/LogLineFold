@@ -1,14 +1,19 @@
+mod cli;
+mod folding;
+mod protein;
+
+use std::collections::HashMap;
 use std::env;
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 
+use cli::FoldCommand;
 use folding_interface::{
     CommandShell, EnvironmentPreset, FoldSpan, InformationToRotation, InputLoader, LogLineWriter,
     LogMetadata, PresetLoader, ShellConfig, TempScheduleConfig,
 };
 use folding_sim::{FoldingMetrics, TrajectoryVisualizer};
-use serde_json::Value;
 
 struct CliOptions {
     preset: Option<String>,
@@ -28,8 +33,7 @@ struct CliOptions {
 }
 
 impl CliOptions {
-    fn parse() -> Result<Self, String> {
-        let args: Vec<String> = env::args().skip(1).collect();
+    fn parse_from(args: &[String]) -> Result<Self, String> {
         let mut options = Self {
             preset: None,
             fasta: None,
@@ -135,8 +139,7 @@ fn run_replay(path: &Path, show_ghosts: bool) -> Result<(), String> {
         .next()
         .ok_or_else(|| "log file is empty".to_string())?
         .map_err(|err| err.to_string())?;
-    let metadata: LogMetadata = serde_json::from_str(&metadata_line)
-        .map_err(|err| format!("failed to parse metadata: {err}"))?;
+    let metadata = parse_metadata_line(&metadata_line)?;
 
     let mut spans: Vec<FoldSpan> = Vec::new();
     let mut violation_details = Vec::new();
@@ -146,24 +149,11 @@ fn run_replay(path: &Path, show_ghosts: bool) -> Result<(), String> {
         if line.trim().is_empty() {
             continue;
         }
-        let value: Value = serde_json::from_str(&line)
-            .map_err(|err| format!("failed to parse log line: {err}"))?;
-        if value.get("type").and_then(Value::as_str) == Some("violation") {
-            violation_details.push(
-                value
-                    .get("detail")
-                    .and_then(Value::as_str)
-                    .unwrap_or("unknown violation")
-                    .to_string(),
-            );
-            continue;
+        if line.starts_with("violation|") {
+            violation_details.push(parse_violation_detail(&line));
+        } else if line.starts_with("span|") {
+            spans.push(parse_span_line(&line)?);
         }
-        let mut span: FoldSpan =
-            serde_json::from_value(value).map_err(|err| format!("failed to decode span: {err}"))?;
-        if span.delta_E > 0.0 {
-            span.ghost_flag = true;
-        }
-        spans.push(span);
     }
 
     let applied = spans.iter().filter(|s| !s.ghost_flag).count();
@@ -230,8 +220,121 @@ fn run_replay(path: &Path, show_ghosts: bool) -> Result<(), String> {
     Ok(())
 }
 
+fn parse_metadata_line(raw: &str) -> Result<LogMetadata, String> {
+    if !raw.starts_with("metadata|") {
+        return Err("missing metadata prefix".into());
+    }
+    let fields = parse_fields(raw)?;
+    let contract = fields
+        .get("contract_name")
+        .map(|value| {
+            if value.is_empty() {
+                None
+            } else {
+                Some(value.clone())
+            }
+        })
+        .unwrap_or(None);
+    Ok(LogMetadata {
+        run_id: fields
+            .get("run_id")
+            .cloned()
+            .unwrap_or_else(|| "unknown".into()),
+        timestamp: fields
+            .get("timestamp")
+            .cloned()
+            .unwrap_or_else(|| "0".into()),
+        contract_name: contract,
+        environment: fields
+            .get("environment")
+            .cloned()
+            .unwrap_or_else(|| "unknown".into()),
+        temperature: parse_f64_field(&fields, "temperature")?,
+        time_step_ms: parse_u64_field(&fields, "time_step_ms")?,
+        accepted_spans: parse_usize_field(&fields, "accepted_spans")?,
+        rejected_spans: parse_usize_field(&fields, "rejected_spans")?,
+        acceptance_rate: parse_f64_field(&fields, "acceptance_rate")?,
+        final_potential_energy: parse_f64_field(&fields, "final_potential_energy")?,
+        final_gibbs_energy: parse_f64_field(&fields, "final_gibbs_energy")?,
+        informational_efficiency: parse_f64_field(&fields, "informational_efficiency")?,
+        total_work: parse_f64_field(&fields, "total_work")?,
+    })
+}
+
+fn parse_span_line(raw: &str) -> Result<FoldSpan, String> {
+    let fields = parse_fields(raw)?;
+    Ok(FoldSpan {
+        id: fields
+            .get("id")
+            .cloned()
+            .unwrap_or_else(|| "unknown".into()),
+        delta_theta: parse_f64_field(&fields, "delta_theta")?,
+        delta_S: parse_f64_field(&fields, "delta_S")?,
+        delta_I: parse_f64_field(&fields, "delta_I")?,
+        delta_E: parse_f64_field(&fields, "delta_E")?,
+        duration_ms: parse_u64_field(&fields, "duration_ms")?,
+        ghost_flag: matches!(fields.get("ghost_flag"), Some(v) if v == "1"),
+        G: parse_f64_field(&fields, "G")?,
+    })
+}
+
+fn parse_violation_detail(raw: &str) -> String {
+    raw.split('|')
+        .skip(1)
+        .find_map(|segment| segment.strip_prefix("detail="))
+        .unwrap_or("unknown violation")
+        .to_string()
+}
+
+fn parse_fields(raw: &str) -> Result<HashMap<String, String>, String> {
+    let mut map = HashMap::new();
+    for segment in raw.split('|').skip(1) {
+        if segment.is_empty() {
+            continue;
+        }
+        let (key, value) = segment
+            .split_once('=')
+            .ok_or_else(|| format!("invalid field: {segment}"))?;
+        map.insert(key.to_string(), value.to_string());
+    }
+    Ok(map)
+}
+
+fn parse_f64_field(fields: &HashMap<String, String>, key: &str) -> Result<f64, String> {
+    fields
+        .get(key)
+        .ok_or_else(|| format!("missing field {key}"))?
+        .parse()
+        .map_err(|_| format!("invalid float for {key}"))
+}
+
+fn parse_u64_field(fields: &HashMap<String, String>, key: &str) -> Result<u64, String> {
+    fields
+        .get(key)
+        .ok_or_else(|| format!("missing field {key}"))?
+        .parse()
+        .map_err(|_| format!("invalid integer for {key}"))
+}
+
+fn parse_usize_field(fields: &HashMap<String, String>, key: &str) -> Result<usize, String> {
+    fields
+        .get(key)
+        .ok_or_else(|| format!("missing field {key}"))?
+        .parse()
+        .map_err(|_| format!("invalid integer for {key}"))
+}
+
 fn main() {
-    let opts = match CliOptions::parse() {
+    let args: Vec<String> = env::args().collect();
+
+    if args.len() > 1 && args[1].eq_ignore_ascii_case("fold") {
+        if let Err(err) = run_fold_cli(&args[2..]) {
+            eprintln!("fold command failed: {err}");
+        }
+        return;
+    }
+
+    let opts = match CliOptions::parse_from(&args[1..]) {
         Ok(o) => o,
         Err(err) => {
             eprintln!("argument error: {err}");
@@ -239,11 +342,61 @@ fn main() {
         }
     };
 
-    if let Some(path) = opts.replay.as_ref() {
-        if let Err(err) = run_replay(path, opts.show_ghosts) {
-            eprintln!("replay failed: {err}");
+    if let Err(err) = run_legacy(opts) {
+        eprintln!("{err}");
+    }
+}
+
+fn run_fold_cli(args: &[String]) -> Result<(), String> {
+    let command = FoldCommand::parse(args)?;
+    let artifacts = folding::run_fold(&command)?;
+
+    if let Some(parent) = command.output.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent).map_err(|err| {
+                format!(
+                    "failed to create output directory {}: {err}",
+                    parent.display()
+                )
+            })?;
         }
-        return;
+    }
+    if let Some(parent) = command.contract_path.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent).map_err(|err| {
+                format!(
+                    "failed to create contract directory {}: {err}",
+                    parent.display()
+                )
+            })?;
+        }
+    }
+
+    protein::write_pdb(&artifacts.chain, &command.output, &artifacts.sequence)?;
+    folding::persist_contract(&artifacts.contract, &command.contract_path)?;
+
+    println!(
+        "LogLine fold completed for {} residues.",
+        artifacts.sequence.len()
+    );
+    println!("PDB written to {}", command.output.display());
+    println!("Contract saved to {}", command.contract_path.display());
+    if command.rollback {
+        println!("Rollback enabled for this workflow.");
+    }
+    if let Some(ref embeddings) = artifacts.embeddings {
+        println!("PyTorch embeddings length: {}", embeddings.len());
+    } else {
+        println!("PyTorch embeddings unavailable; using geometric heuristic.");
+    }
+
+    Ok(())
+}
+
+fn run_legacy(opts: CliOptions) -> Result<(), String> {
+    if let Some(path) = opts.replay.as_ref() {
+        run_replay(path, opts.show_ghosts)?;
+        return Ok(());
     }
 
     let mut chain = None;
@@ -274,8 +427,10 @@ fn main() {
         match InputLoader::load_fasta(fasta_path) {
             Ok(loaded_chain) => chain = Some(loaded_chain),
             Err(err) => {
-                eprintln!("failed to load FASTA {}: {err}", fasta_path.display());
-                return;
+                return Err(format!(
+                    "failed to load FASTA {}: {err}",
+                    fasta_path.display()
+                ));
             }
         }
     }
@@ -284,8 +439,10 @@ fn main() {
         match InputLoader::load_contract(contract_path) {
             Ok(loaded_contract) => contract = Some(loaded_contract),
             Err(err) => {
-                eprintln!("failed to load contract {}: {err}", contract_path.display());
-                return;
+                return Err(format!(
+                    "failed to load contract {}: {err}",
+                    contract_path.display()
+                ));
             }
         }
         if label.is_none() {
@@ -295,14 +452,9 @@ fn main() {
         }
     }
 
-    let Some(chain) = chain else {
-        eprintln!("no chain available after parsing inputs");
-        return;
-    };
-    let Some(contract) = contract else {
-        eprintln!("no contract available after parsing inputs");
-        return;
-    };
+    let chain = chain.ok_or_else(|| "no chain available after parsing inputs".to_string())?;
+    let contract =
+        contract.ok_or_else(|| "no contract available after parsing inputs".to_string())?;
 
     let environment = opts
         .environment
@@ -378,4 +530,5 @@ fn main() {
     }
 
     println!("Trajectory snapshot: {}", trajectory_json);
+    Ok(())
 }

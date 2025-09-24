@@ -1,10 +1,8 @@
 [package]
-name = "folding-interface"
+name = "folding-sim"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
 folding-core = { path = "../core" }
 folding-time = { path = "../time" }
-folding-sim = { path = "../sim" }
-folding-molecule = { path = "../molecule" }
