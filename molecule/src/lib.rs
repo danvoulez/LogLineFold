@@ -1,5 +1,6 @@
 use std::f64::consts::PI;
 
+
 /// Identifier for a residue within a peptide chain.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct ResidueId(pub usize);

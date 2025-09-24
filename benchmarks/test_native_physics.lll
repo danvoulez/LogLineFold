@@ -1,0 +1,22 @@
+# Simple test contract for native physics engine
+domain test_protein {
+    sequence: "AAAGGG"
+    length: 6
+}
+
+physics toy {
+    temperature: 300.0
+    steps: 5
+}
+
+rotate residue 0 by 10.0 degrees
+rotate residue 1 by -15.0 degrees
+commit
+
+physics coarse {
+    temperature: 300.0
+    steps: 5
+}
+
+rotate residue 2 by 20.0 degrees
+commit

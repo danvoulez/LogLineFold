@@ -5,6 +5,7 @@ members = [
     "molecule",
     "interface",
     "sim",
-    "app"
+    "app",
+    "physics"
 ]
 resolver = "2"

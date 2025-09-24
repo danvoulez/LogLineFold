@@ -41,6 +41,19 @@ pub enum PhysicsLevel {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ForceField {
+    Amber99SB,
+    CHARMM36,
+    OPLS_AA,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PhysicsConfig {
+    pub level: PhysicsLevel,
+    pub force_field: ForceField,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PhysicsSpanMode {
     Toy,
     Physics,

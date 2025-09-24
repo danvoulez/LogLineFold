@@ -3,7 +3,7 @@ use std::time::Duration;
 use crate::folding_parser::{ContractInstruction, FoldingContract, PhysicsLevel, PhysicsSpanMode};
 use crate::folding_ruleset::{RuleViolation, Ruleset};
 use crate::micro_oscillator::MicroOscillator;
-use crate::physics_bridge::{self, PhysicsRequest, PhysicsSpanMetrics};
+use crate::physics_bridge::{self, PhysicsRequest, PhysicsSpanMetrics, PhysicsEngine};
 use crate::protein_state::{EnergyState, ProteinSnapshot, ProteinState};
 use crate::rotation_solver::{RotationCommand, RotationOutcome, RotationSolver};
 use crate::simple_rng::SimpleRng;
@@ -86,6 +86,7 @@ pub struct FoldingEngine {
     span_physics_mode: PhysicsSpanMode,
     physics_spans: Vec<String>,
     physics_span_metrics: Vec<PhysicsSpanRecord>,
+    physics_engine: PhysicsEngine,
 }
 
 #[cfg(test)]
@@ -122,6 +123,7 @@ pub struct FoldingEngineBuilder {
     rng_seed: Option<u64>,
     temperature_schedule: Option<TemperatureSchedule>,
     physics_level: Option<PhysicsLevel>,
+    physics_engine: Option<PhysicsEngine>,
 }
 
 pub struct ExecutionReport {
@@ -176,6 +178,7 @@ impl FoldingEngineBuilder {
             rng_seed: None,
             temperature_schedule: None,
             physics_level: None,
+            physics_engine: None,
         }
     }
 
@@ -224,6 +227,11 @@ impl FoldingEngineBuilder {
         self
     }
 
+    pub fn with_physics_engine(mut self, engine: PhysicsEngine) -> Self {
+        self.physics_engine = Some(engine);
+        self
+    }
+
     pub fn build(self) -> FoldingEngine {
         let chain = self.chain.expect("chain not provided");
         let energy_model = self.energy_model.unwrap_or_default();
@@ -245,6 +253,7 @@ impl FoldingEngineBuilder {
         let solver = RotationSolver::new(oscillator, clock);
         let validator = Validator::new(ruleset);
         let physics_level = self.physics_level.unwrap_or(PhysicsLevel::Toy);
+        let physics_engine = self.physics_engine.unwrap_or(PhysicsEngine::Auto);
         FoldingEngine {
             state,
             solver,
@@ -267,6 +276,7 @@ impl FoldingEngineBuilder {
             span_physics_mode: PhysicsSpanMode::Toy,
             physics_spans: Vec::new(),
             physics_span_metrics: Vec::new(),
+            physics_engine,
         }
     }
 }
@@ -377,12 +387,12 @@ impl FoldingEngine {
         };
         let mut physics_applied = false;
         let mut outcome = if self.span_physics_mode == PhysicsSpanMode::Physics {
-            if let Some(physics_outcome) = physics_bridge::run_physics_step(PhysicsRequest {
+            if let Some(physics_outcome) = physics_bridge::run_physics_step_with_engine(PhysicsRequest {
                 chain: &self.state.chain,
                 command: command.clone(),
                 level: self.physics_level,
                 temperature: self.temperature,
-            }) {
+            }, self.physics_engine.clone()) {
                 physics_applied = true;
                 physics_outcome
             } else {

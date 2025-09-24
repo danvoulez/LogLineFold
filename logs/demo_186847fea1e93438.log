@@ -1,0 +1,4 @@
+metadata|run_id=186847fea1e93438|timestamp=1758734813.451859000|contract_name=demo|environment=aqueous|temperature=298.000000|time_step_ms=1|accepted_spans=0|rejected_spans=3|acceptance_rate=0.000000|final_potential_energy=0.896598|final_gibbs_energy=0.896598|informational_efficiency=0.000000|total_work=-0.000000
+violation|detail=MetropolisRejected { delta_energy: 1.4347850813099068 }
+violation|detail=BondLengthOutOfRange { residue_left: ResidueId(0), residue_right: ResidueId(1), distance: 2.4608988956142963, min: 1.2, max: 1.9 }
+violation|detail=BondLengthOutOfRange { residue_left: ResidueId(0), residue_right: ResidueId(1), distance: 1.9777878248868956, min: 1.2, max: 1.9 }
