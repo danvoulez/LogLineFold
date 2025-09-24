@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::env;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
@@ -8,7 +9,6 @@ use folding_interface::{
     LogMetadata, PresetLoader, ShellConfig, TempScheduleConfig,
 };
 use folding_sim::{FoldingMetrics, TrajectoryVisualizer};
-use serde_json::Value;
 
 struct CliOptions {
     preset: Option<String>,
@@ -135,8 +135,7 @@ fn run_replay(path: &Path, show_ghosts: bool) -> Result<(), String> {
         .next()
         .ok_or_else(|| "log file is empty".to_string())?
         .map_err(|err| err.to_string())?;
-    let metadata: LogMetadata = serde_json::from_str(&metadata_line)
-        .map_err(|err| format!("failed to parse metadata: {err}"))?;
+    let metadata = parse_metadata_line(&metadata_line)?;
 
     let mut spans: Vec<FoldSpan> = Vec::new();
     let mut violation_details = Vec::new();
@@ -146,24 +145,11 @@ fn run_replay(path: &Path, show_ghosts: bool) -> Result<(), String> {
         if line.trim().is_empty() {
             continue;
         }
-        let value: Value = serde_json::from_str(&line)
-            .map_err(|err| format!("failed to parse log line: {err}"))?;
-        if value.get("type").and_then(Value::as_str) == Some("violation") {
-            violation_details.push(
-                value
-                    .get("detail")
-                    .and_then(Value::as_str)
-                    .unwrap_or("unknown violation")
-                    .to_string(),
-            );
-            continue;
+        if line.starts_with("violation|") {
+            violation_details.push(parse_violation_detail(&line));
+        } else if line.starts_with("span|") {
+            spans.push(parse_span_line(&line)?);
         }
-        let mut span: FoldSpan =
-            serde_json::from_value(value).map_err(|err| format!("failed to decode span: {err}"))?;
-        if span.delta_E > 0.0 {
-            span.ghost_flag = true;
-        }
-        spans.push(span);
     }
 
     let applied = spans.iter().filter(|s| !s.ghost_flag).count();
@@ -228,6 +214,110 @@ fn run_replay(path: &Path, show_ghosts: bool) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+fn parse_metadata_line(raw: &str) -> Result<LogMetadata, String> {
+    if !raw.starts_with("metadata|") {
+        return Err("missing metadata prefix".into());
+    }
+    let fields = parse_fields(raw)?;
+    let contract = fields
+        .get("contract_name")
+        .map(|value| {
+            if value.is_empty() {
+                None
+            } else {
+                Some(value.clone())
+            }
+        })
+        .unwrap_or(None);
+    Ok(LogMetadata {
+        run_id: fields
+            .get("run_id")
+            .cloned()
+            .unwrap_or_else(|| "unknown".into()),
+        timestamp: fields
+            .get("timestamp")
+            .cloned()
+            .unwrap_or_else(|| "0".into()),
+        contract_name: contract,
+        environment: fields
+            .get("environment")
+            .cloned()
+            .unwrap_or_else(|| "unknown".into()),
+        temperature: parse_f64_field(&fields, "temperature")?,
+        time_step_ms: parse_u64_field(&fields, "time_step_ms")?,
+        accepted_spans: parse_usize_field(&fields, "accepted_spans")?,
+        rejected_spans: parse_usize_field(&fields, "rejected_spans")?,
+        acceptance_rate: parse_f64_field(&fields, "acceptance_rate")?,
+        final_potential_energy: parse_f64_field(&fields, "final_potential_energy")?,
+        final_gibbs_energy: parse_f64_field(&fields, "final_gibbs_energy")?,
+        informational_efficiency: parse_f64_field(&fields, "informational_efficiency")?,
+        total_work: parse_f64_field(&fields, "total_work")?,
+    })
+}
+
+fn parse_span_line(raw: &str) -> Result<FoldSpan, String> {
+    let fields = parse_fields(raw)?;
+    Ok(FoldSpan {
+        id: fields
+            .get("id")
+            .cloned()
+            .unwrap_or_else(|| "unknown".into()),
+        delta_theta: parse_f64_field(&fields, "delta_theta")?,
+        delta_S: parse_f64_field(&fields, "delta_S")?,
+        delta_I: parse_f64_field(&fields, "delta_I")?,
+        delta_E: parse_f64_field(&fields, "delta_E")?,
+        duration_ms: parse_u64_field(&fields, "duration_ms")?,
+        ghost_flag: matches!(fields.get("ghost_flag"), Some(v) if v == "1"),
+        G: parse_f64_field(&fields, "G")?,
+    })
+}
+
+fn parse_violation_detail(raw: &str) -> String {
+    raw.split('|')
+        .skip(1)
+        .find_map(|segment| segment.strip_prefix("detail="))
+        .unwrap_or("unknown violation")
+        .to_string()
+}
+
+fn parse_fields(raw: &str) -> Result<HashMap<String, String>, String> {
+    let mut map = HashMap::new();
+    for segment in raw.split('|').skip(1) {
+        if segment.is_empty() {
+            continue;
+        }
+        let (key, value) = segment
+            .split_once('=')
+            .ok_or_else(|| format!("invalid field: {segment}"))?;
+        map.insert(key.to_string(), value.to_string());
+    }
+    Ok(map)
+}
+
+fn parse_f64_field(fields: &HashMap<String, String>, key: &str) -> Result<f64, String> {
+    fields
+        .get(key)
+        .ok_or_else(|| format!("missing field {key}"))?
+        .parse()
+        .map_err(|_| format!("invalid float for {key}"))
+}
+
+fn parse_u64_field(fields: &HashMap<String, String>, key: &str) -> Result<u64, String> {
+    fields
+        .get(key)
+        .ok_or_else(|| format!("missing field {key}"))?
+        .parse()
+        .map_err(|_| format!("invalid integer for {key}"))
+}
+
+fn parse_usize_field(fields: &HashMap<String, String>, key: &str) -> Result<usize, String> {
+    fields
+        .get(key)
+        .ok_or_else(|| format!("missing field {key}"))?
+        .parse()
+        .map_err(|_| format!("invalid integer for {key}"))
 }
 
 fn main() {

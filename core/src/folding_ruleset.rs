@@ -210,8 +210,10 @@ mod tests {
     #[test]
     fn detects_structural_clash_when_residues_overlap() {
         let residues = vec![
-            Residue::new(ResidueId(0), AminoAcid::Alanine).with_position([0.0, 0.0, 0.0]),
-            Residue::new(ResidueId(1), AminoAcid::Glycine).with_position([0.1, 0.0, 0.0]),
+            Residue::new(ResidueId(0), AminoAcid::Alanine, [0.0, 0.0, 0.0])
+                .with_position([0.0, 0.0, 0.0]),
+            Residue::new(ResidueId(1), AminoAcid::Glycine, [0.0, 0.0, 0.0])
+                .with_position([0.1, 0.0, 0.0]),
         ];
         let chain = PeptideChain::new(residues);
         let ruleset = Ruleset::default().with_min_distance(0.5);
@@ -222,8 +224,10 @@ mod tests {
     #[test]
     fn detects_bond_length_out_of_range() {
         let residues = vec![
-            Residue::new(ResidueId(0), AminoAcid::Alanine).with_position([0.0, 0.0, 0.0]),
-            Residue::new(ResidueId(1), AminoAcid::Glycine).with_position([2.5, 0.0, 0.0]),
+            Residue::new(ResidueId(0), AminoAcid::Alanine, [0.0, 0.0, 0.0])
+                .with_position([0.0, 0.0, 0.0]),
+            Residue::new(ResidueId(1), AminoAcid::Glycine, [0.0, 0.0, 0.0])
+                .with_position([2.5, 0.0, 0.0]),
         ];
         let chain = PeptideChain::new(residues);
         let ruleset = Ruleset::default().with_bond_distance_range((1.0, 2.0));
