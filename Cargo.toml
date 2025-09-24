@@ -1,0 +1,10 @@
+[workspace]
+members = [
+    "core",
+    "time",
+    "molecule",
+    "interface",
+    "sim",
+    "app"
+]
+resolver = "2"

@@ -1,0 +1,8 @@
+{
+  "alias": "ww",
+  "pdb_id": "1E0L",
+  "chain": "A",
+  "sequence": "GLYALATHRALAVALSERGLUTRPTHRGLUTYRLYSTHRALAASPGLYLYSTHRTYRTYRTYRASNASNARGTHRLEUGLUSERTHRTRPGLULYSPROGLNGLULEULYS",
+  "sequence_hash": "c215b98c307192af855cdf34031e327c2db8fc56",
+  "pdb_path": "data/raw/benchmarks/1E0L.pdb"
+}

@@ -1,0 +1,8 @@
+{
+  "alias": "trpcage",
+  "pdb_id": "1L2Y",
+  "chain": "A",
+  "sequence": "ASNLEUTYRILEGLNTRPLEULYSASPGLYGLYPROSERSERGLYARGPROPROPROSER",
+  "sequence_hash": "21e88d50d8f6e89f145cf6ce754be19143f78e24",
+  "pdb_path": "data/raw/benchmarks/1L2Y.pdb"
+}
