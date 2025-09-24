@@ -1,0 +1,17 @@
+# trpcage benchmark contract (1L2Y)
+set_physics_level GB
+physics_span on
+
+define_domain core 0-59
+require_chaperone Hsp70 for core
+add_modification none at 59
+
+span_alias initial_collapse
+rotate residue=5 angle=-15 duration=5
+rotate residue=9 angle=12 duration=5
+commit
+
+span_alias refinement
+rotate residue=12 angle=-8 duration=4
+rotate residue=15 angle=6 duration=4
+commit

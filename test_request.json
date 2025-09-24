@@ -1,0 +1,15 @@
+{
+  "level": "gb",
+  "temperature": 310.0,
+  "residues": [
+    {"name": "ALA", "index": 1},
+    {"name": "VAL", "index": 2},
+    {"name": "LEU", "index": 3}
+  ],
+  "command": {
+    "residue": 2,
+    "angle_degrees": 15.0,
+    "duration_ms": 10,
+    "label": "test_span"
+  }
+}

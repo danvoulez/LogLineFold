@@ -1,0 +1,5 @@
+# Sample folding contract for testing
+rotate 0 30.0 2
+clash_check
+rotate 1 -15.0 3
+commit
